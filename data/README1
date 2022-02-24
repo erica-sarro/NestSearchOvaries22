@@ -1,0 +1,44 @@
+Raw data associated with Sarro et al. 2022 Integrative Organismal Biology. Details on methodology can be found in the manuscript.
+
+Column index for raw_data.csv:
+
+beeID: individual queen identifier, ME / CA refer to the state in which the bee was collected (Maine / California)
+date: date of collection
+county: county in which bee was collected
+siteDescrip: short description of the field site
+weather: temperature and relative cloud cover on day of collection
+time: time range of collection
+species: species of bee, as determined by 2+ researchers
+pollen: presence (1) / absence (0) of detectable pollen in the corbiculae
+ns: queen was observed nest searching (1) or not (0)
+nsDescrip: description of observed nest searching pattern
+feeding: queen was observed manipulating flower (1) or not (0)
+stationary: queen was observed stationary for >10 seconds, no other behaviors observed (1) or not (0)
+nectaring: queen was observed manipulating flower without pollen in corbiculae (1) or not (0)
+plant: species of plant queen was collected on
+plantDescrip: description of behavior of bee on plant
+collector: initials of individual collecting bee
+collectionNotes: any relevant notes from day of collection
+pollenDissect: pollen was recovered from corbiculae (1) or not (0)
+extParasites: description of external symbionts observed on queen during dissection
+mites: presence (1) or absence (0) of external mites on queen
+crop: qualitative visual description of dissected crop
+intParasites: description of internal parasites observed in queen during dissection
+sphaer: presence (1) or absence (0) of sphaerularia
+otherMacroParasites: presence (1) or absence (0) of non-sphaeurlaria macro parasites 
+ol (1-8): length of terminal oocyte in each of 8 ovarioles - conversion to mm can be found in script file
+os (1-8): developmental stage of terminal oocyte in each of 8 ovarioles
+dissNotes: notes from dissection
+nosema: presence (1) or absence (0) of Variamorpha bombi in tissues based on visual inspection
+apocys: presence (1) or absence (0) of Apocystis bombi n tissues based on visual inspection
+otherMicoPara: presence (1) or absence (0) of other micro parasites in tissues based on visual inspection
+Midgut: notes on midgut slide mount
+hindgut: notes on handout slide mount
+fatbody: notes on fat body slide mount
+trach: notes on tracheal slide mount
+sperma: notes on spermatheca slide mount
+slideNotes: additional notes on slide mounts
+wing1: length in mm of marginal cell on first wing
+wing2: length in mm of marginal cell on second wing
+Spermatheca: visual description of spermatheca
+dissNotes2: additional notes on dissections
