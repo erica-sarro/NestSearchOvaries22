@@ -1,0 +1,807 @@
+---
+title: "Bumble bee nesting & ovary development"
+author: "ES"
+date: "7/23/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# knitr::opts_chunk$set(fig.width=3.5, fig.height=4) 
+    # use only to create vertical vos 2-panel plots
+
+# knitr::opts_chunk$set(fig.width=3, fig.height=4) 
+    # use only to create vertical ALL 2-panel plots
+
+```
+
+# load packages
+```{r}
+library(tidyverse)
+library(ggpubr)   # ggdensity
+library(car)      # qqp
+library(lme4)     # glmer
+library(sjPlot)   # tab_model
+library(effects)  # plot(allEffects)
+library(multcomp) # posthoc tukey
+library(MuMIn)    # model.sel
+```
+
+# load data
+```{r}
+# this assumes the raw_data.csv file is in the same folder as this .Rmd file
+
+fq <- read.csv("raw_data.csv", header = TRUE, 
+               na.strings = c("na", "NA" , "", " "))
+
+# remove stationary queens (outside of 3 focal behavioral categories)
+fq <- fq[fq$stationary == 0,]
+fq
+```
+
+# format fieldqueen data
+fq has one line per queen (used in max oocylte length & resorption analyses)
+```{r}
+# BEHAVIOR
+# add column for behavior to put all behaviors into a single column
+fq$behav <- NA
+# pollen collecting / nest searching /  nectaring
+for (i in 1:nrow(fq)) {
+  if (fq$pollen[i] == 1) {
+    fq$behav[i] <- "pollen"
+  }
+  if (fq$ns[i] == 1) {
+    fq$behav[i] <- "nestsearch"
+  }
+  if (fq$nectaring[i] == 1) {
+    fq$behav[i] <- "nectaring"
+  }
+}
+
+# code columns as correct type
+fq$pollen <- as.character(fq$pollen)
+fq$ns <- as.character(fq$ns)
+fq$nectaring <- as.character(fq$nectaring)
+fq$mites <- as.character(fq$mites)
+fq$sphaer <- as.character(fq$sphaer)
+fq$otherMacroPara <- as.character(fq$otherMacroPara)
+fq$nosema <- as.character(fq$nosema)
+fq$apocys <- as.character(fq$apocys)
+fq$otherMicroPara <- as.character(fq$otherMicroPara)
+
+## BODY SIZE
+# average wing cells together for proxy for body size
+fq$bodySize <- rowMeans(fq[, c("wing1", "wing2")], na.rm = TRUE)
+  
+## DATE
+# format collection date as date
+fq$date <- as.character(fq$date)
+fq$date <- as.Date(fq$date, "%Y%m%d")
+fq
+
+## SUMMARIZE OVARY DATA
+# convert oocyte length measurements to mm 
+# (CA bees: 5 eyepiece units = 4.1mm // 1 ocular micrometer unit = 0.82mm/unit)
+# (ME bees: 10 eyepiece units = 4mm // 1 ocular micrometer = 0.4mm)
+for (i in 1:nrow(fq)) {
+  if (startsWith(fq$beeID[i], "CA")) {
+    fq$o1l[i] <- fq$o1l[i] * 0.82
+    fq$o2l[i] <- fq$o2l[i] * 0.82
+    fq$o3l[i] <- fq$o3l[i] * 0.82
+    fq$o4l[i] <- fq$o4l[i] * 0.82
+    fq$o5l[i] <- fq$o5l[i] * 0.82
+    fq$o6l[i] <- fq$o6l[i] * 0.82
+    fq$o7l[i] <- fq$o7l[i] * 0.82
+    fq$o8l[i] <- fq$o8l[i] * 0.82
+  }
+  if (startsWith(fq$beeID[i], "ME")) {
+    fq$o1l[i] <- fq$o1l[i] * 0.4
+    fq$o2l[i] <- fq$o2l[i] * 0.4
+    fq$o3l[i] <- fq$o3l[i] * 0.4
+    fq$o4l[i] <- fq$o4l[i] * 0.4
+    fq$o5l[i] <- fq$o5l[i] * 0.4
+    fq$o6l[i] <- fq$o6l[i] * 0.4
+    fq$o7l[i] <- fq$o7l[i] * 0.4
+    fq$o8l[i] <- fq$o8l[i] * 0.4
+  }
+}
+
+# count number of resorbed oocytes per queen & number of na oocytes per queen
+fq$oocNres <- NA
+fq$oocNNA <- NA
+
+for (i in 1:nrow(fq)) {
+  nR <- 0
+  nNA <- 0
+  if (is.na(fq$o1s[i])) {
+    nNA <- nNA + 1
+  } else if (fq$o1s[i] == "R") {
+    nR <- nR + 1
+  }
+  if (is.na(fq$o2s[i])) {
+    nNA <- nNA + 1
+  } else if (fq$o2s[i] == "R") {
+    nR <- nR + 1
+  }
+  if (is.na(fq$o3s[i])) {
+    nNA <- nNA + 1
+  } else if (fq$o3s[i] == "R") {
+    nR <- nR + 1
+  }
+  if (is.na(fq$o4s[i])) {
+    nNA <- nNA + 1
+  } else if (fq$o4s[i] == "R") {
+    nR <- nR + 1
+  }
+  if (is.na(fq$o5s[i])) {
+    nNA <- nNA + 1
+  } else if (fq$o5s[i] == "R") {
+    nR <- nR + 1
+  }
+  if (is.na(fq$o6s[i])) {
+    nNA <- nNA + 1
+  } else if (fq$o6s[i] == "R") {
+    nR <- nR + 1
+  }
+  if (is.na(fq$o7s[i])) {
+    nNA <- nNA + 1
+  } else if (fq$o7s[i] == "R") {
+    nR <- nR + 1
+  }
+  if (is.na(fq$o8s[i])) {
+    nNA <- nNA + 1
+  } else if (fq$o8s[i] == "R") {
+    nR <- nR + 1
+  }
+  fq$oocNres[i] <- nR
+  fq$oocNNA[i] <- nNA
+}
+
+# calculate the proportion of oocytes resorbed per queen
+fq$oocPropR <- fq$oocNres / (8 - fq$oocNNA)
+```
+
+# format fieldovary data 
+fo has one line per ovary per queen (used in oocyte length analyses)
+```{r}
+## MAKE SEPARATE DF OF ALL OOCYTE LENGTHS (including resorbed oocytes)
+# gather oocyte lengths for graphing together
+lendf <- fq %>% gather(o1l, o2l, o3l, o4l, o5l, o6l, o7l, o8l,
+                         key = "oocyte",
+                         value = "oocLen")
+
+## MAKE SEPARATE DF OF OOCYTE LENGTH FOR UNRESORBED OOCYTES ONLY
+# remove resorbed oocytes
+lenUnRdf <- lendf
+lenUnRdf$oocLen[lenUnRdf$oocyte == "o1l" & lenUnRdf$o1s == "R"] <- NA
+lenUnRdf$oocLen[lenUnRdf$oocyte == "o2l" & lenUnRdf$o2s == "R"] <- NA
+lenUnRdf$oocLen[lenUnRdf$oocyte == "o3l" & lenUnRdf$o3s == "R"] <- NA
+lenUnRdf$oocLen[lenUnRdf$oocyte == "o4l" & lenUnRdf$o4s == "R"] <- NA
+lenUnRdf$oocLen[lenUnRdf$oocyte == "o5l" & lenUnRdf$o5s == "R"] <- NA
+lenUnRdf$oocLen[lenUnRdf$oocyte == "o6l" & lenUnRdf$o6s == "R"] <- NA
+lenUnRdf$oocLen[lenUnRdf$oocyte == "o7l" & lenUnRdf$o7s == "R"] <- NA
+lenUnRdf$oocLen[lenUnRdf$oocyte == "o8l" & lenUnRdf$o8s == "R"] <- NA
+#rename the column to differentiate from all oocyte lengths
+names(lenUnRdf)[names(lenUnRdf) == "oocLen"] <- "oocLen_unR"
+lenUnRdf
+
+
+## MAKE SEPARATE OOCYTE STAGE DF
+# gather oocyte stages
+stagedf <- fq %>% gather(o1s, o2s, o3s, o4s, o5s, o6s, o7s, o8s,
+                         key = "oocyte",
+                         value = "stage")
+# mark resorbed oocytes in own column
+stagedf$res <- 0
+# if stage is R, make res 1
+stagedf$res[stagedf$stage == "R"] <- 1
+# if stage is NA, make res NA
+stagedf$res[is.na(stagedf$stage)] <- NA
+# make resorbed oocytes NA stage 
+stagedf$stage[stagedf$stage == "R"] <- 4
+stagedf$stage <- as.numeric(stagedf$stage)
+stagedf
+
+# MERGE stagedf, lenUnRdf, & lendf TO MAKE ONE DF w/ 1 ROW PER OVARY PER QUEEN
+fo <- cbind(lendf, lenUnRdf$oocLen_unR, stagedf$stage, stagedf$res)
+# rename added columns
+names(fo)[names(fo) == "lenUnRdf$oocLen_unR"] <- "oocLen_unR"
+names(fo)[names(fo) == "stagedf$stage"] <- "stage"
+names(fo)[names(fo) == "stagedf$res"] <- "res"
+fo
+
+## GET SUMMARY STATS & ADD THEM BACK INTO fq
+# pivot wider fo for summary stats
+sumdf <- pivot_wider(fo, names_from = oocyte, 
+                     values_from = c(oocLen, oocLen_unR, stage, res, oocPropR),
+                     id_col = c(beeID)) 
+# calculate max unresorbed oocyte length for each queen
+maxUnR_Lendf <- sumdf[, c("oocLen_unR_o1l", "oocLen_unR_o2l", 
+                          "oocLen_unR_o3l", "oocLen_unR_o4l", 
+                          "oocLen_unR_o5l", "oocLen_unR_o6l", 
+                          "oocLen_unR_o7l", "oocLen_unR_o8l")]
+max <- apply(maxUnR_Lendf, 1, max, na.rm = TRUE) 
+max[is.infinite(max)] <- NA
+fq$oocMaxUnR_Len <- max
+# calculate min unresorbed oocyte length for each queen
+maxUnR_Lendf <- sumdf[, c("oocLen_unR_o1l", "oocLen_unR_o2l", 
+                          "oocLen_unR_o3l", "oocLen_unR_o4l", 
+                          "oocLen_unR_o5l", "oocLen_unR_o6l", 
+                          "oocLen_unR_o7l", "oocLen_unR_o8l")]
+min <- apply(maxUnR_Lendf, 1, min, na.rm = TRUE) 
+min[is.infinite(min)] <- NA
+fq$oocMinUnR_Len <- min
+# calculate mean unresorbed oocyte length for each queen
+fq$oocMeanUnR_Len <- rowMeans(sumdf[, c("oocLen_unR_o1l", "oocLen_unR_o2l", 
+                                        "oocLen_unR_o3l", "oocLen_unR_o4l", 
+                                        "oocLen_unR_o5l", "oocLen_unR_o6l", 
+                                        "oocLen_unR_o7l", "oocLen_unR_o8l")], 
+                              na.rm = TRUE)
+fq
+```
+
+# summarize
+```{r}
+# number of bees in each behavior by species
+
+# vos
+print(paste(nrow(fq[fq$species == "vosnesenskii" & fq$behav == "nestsearch", ]),
+            "vosnesenskii nest searching"))
+print(paste(nrow(fq[fq$species == "vosnesenskii" & fq$behav == "pollen", ]), 
+            "vosnesenskii pollen collecting"))
+print(paste(nrow(fq[fq$species == "vosnesenskii" & fq$behav == "nectaring", ]), 
+            "vosnesenskii nectaring"))
+
+# substantial mites
+paste(nrow(fq[fq$mites == "1" & fq$behav == "nestsearch", ]), 
+      " overall nest searching with substantial mites")
+paste(nrow(fq[fq$mites == "1" & fq$behav == "pollen", ]), 
+      " overall pollen collecting with substantial mites")
+paste(nrow(fq[fq$mites == "1" & fq$behav == "nectaring", ]), 
+      " overall nectaring with substantial mites")
+
+# 1-5 mites
+paste(nrow(fq[fq$mitesAmount == "one" & fq$behav == "nestsearch", ]) + 
+      nrow(fq[fq$mitesAmount == "two" & fq$behav == "nestsearch", ]) +
+      nrow(fq[fq$mitesAmount == "three" & fq$behav == "nestsearch", ]) +
+      nrow(fq[fq$mitesAmount == "four" & fq$behav == "nestsearch", ]) +
+      nrow(fq[fq$mitesAmount == "five" & fq$behav == "nestsearch", ]), 
+      " overall nest searching with 1-5 mites")
+paste(nrow(fq[fq$mitesAmount == "one" & fq$behav == "pollen", ]) + 
+      nrow(fq[fq$mitesAmount == "two" & fq$behav == "pollen", ]) +
+      nrow(fq[fq$mitesAmount == "three" & fq$behav == "pollen", ]) +
+      nrow(fq[fq$mitesAmount == "four" & fq$behav == "pollen", ]) +
+      nrow(fq[fq$mitesAmount == "five" & fq$behav == "pollen", ]), 
+      " overall pollen collecting with 5 or fewer mites")
+paste(nrow(fq[fq$mitesAmount == "one" & fq$behav == "nectaring", ]) + 
+      nrow(fq[fq$mitesAmount == "two" & fq$behav == "nectaring", ]) +
+      nrow(fq[fq$mitesAmount == "three" & fq$behav == "nectaring", ]) +
+      nrow(fq[fq$mitesAmount == "four" & fq$behav == "nectaring", ]) +
+      nrow(fq[fq$mitesAmount == "five" & fq$behav == "nectaring", ]), 
+      " overall nectaring with 1-5 mites")
+
+# sphaer
+fq[fq$sphaer == "1" & fq$behav == "nestsearch", ]
+fq[fq$sphaer == "1" & fq$behav == "pollen", ]
+fq[fq$sphaer == "1" & fq$behav == "nectaring", ]
+
+# nosema
+fq[fq$nosema == "1" & fq$behav == "nestsearch", ]
+fq[fq$nosema == "1" & fq$behav == "pollen", ]
+fq[fq$nosema == "1" & fq$behav == "nectaring", ]
+```
+
+# plot data
+```{r}
+# split out data, order behavior levels
+
+foCA <- fo[startsWith(fo$beeID, "CA"),]
+foME <- fo[startsWith(fo$beeID, "IME"),]
+fqCA <- fq[startsWith(fo$beeID, "CA"),]
+fqME <- fq[startsWith(fo$beeID, "IME"),]
+
+foCA$behav <- ordered(foCA$behav, 
+                      levels = c("nestsearch", "pollen", "nectaring"))
+foME$behav <- ordered(foME$behav, 
+                      levels = c("nestsearch", "pollen", "nectaring"))
+fqCA$behav <- ordered(fqCA$behav, 
+                      levels = c("nestsearch", "pollen", "nectaring"))
+fqME$behav <- ordered(fqME$behav, 
+                      levels = c("nestsearch", "pollen", "nectaring"))
+fo$behav <- ordered(fo$behav, levels = c("nestsearch", "pollen", "nectaring"))
+fq$behav <- ordered(fq$behav, levels = c("nestsearch", "pollen", "nectaring"))
+```
+
+## all species
+```{r}
+p1 <- ggplot(fo, aes(x = species, y = oocLen_unR, color = behav, group = behav)) +
+  geom_hline(yintercept = mean(fo[fo$behav == "nestsearch", "oocLen_unR"], 
+                               na.rm = TRUE),
+             color="darkorchid4", alpha = 0.4) +
+  geom_hline(yintercept = mean(fo[fo$behav == "pollen", "oocLen_unR"], 
+                               na.rm = TRUE),
+             color="cyan4", alpha = 0.4) +
+  geom_hline(yintercept = mean(fo[fo$behav == "nectaring", "oocLen_unR"], 
+                               na.rm = TRUE), 
+             color="orange", alpha = 0.4) +
+  geom_point(aes(shape = interaction(mites, sphaer)), 
+             position = position_jitterdodge(jitter.width=0.6, 
+                                             jitter.height=0.05, 
+                                             dodge.width = 0.9),
+             alpha = 0.7) +
+  scale_shape_manual(values = c(21, 16, 2, 17), name = NULL, 
+                     labels = c("0 mites,\n- Sphaerularia", 
+                                ">5 mites,\n- Sphaerularia", 
+                                "0 mites,\n+ Sphaerularia", 
+                                ">5 mites,\n+ Sphaerularia")) +
+  guides(shape = guide_legend(override.aes = list(size = 3))) +
+  scale_color_manual(values = c("darkorchid4", "cyan4", "orange"), 
+                     name = NULL, labels = c("Nest-searching", 
+                                             "Pollen-collecting", 
+                                             "Nectaring")) +
+  guides(color = guide_legend(override.aes = list(shape = 15, size = 5))) +
+  ylab("Oocyte length (mm)") +
+  xlab("Species") +
+  theme(text = element_text(size=12), axis.text.x = element_text(angle = 90), 
+        legend.position = "bottom", legend.box="vertical")
+p1
+
+# oocyte resorption by species
+p2 <- ggplot(fo[!duplicated(fo$beeID),], aes(x = species, y = oocPropR, 
+                                             color = behav, group = behav)) +
+  geom_hline(yintercept = mean(fo[fo$behav == "nestsearch", "oocPropR"], 
+                               na.rm = TRUE),
+             color="darkorchid4", alpha = 0.4) +
+  geom_hline(yintercept = mean(fo[fo$behav == "pollen", "oocPropR"], 
+                               na.rm = TRUE), 
+             color="cyan4", alpha = 0.4) +
+  geom_hline(yintercept = mean(fo[fo$behav == "nectaring", "oocPropR"], 
+                               na.rm = TRUE), 
+             color="orange", alpha = 0.4) +
+  geom_point(aes(shape = interaction(mites, sphaer), color = behav), 
+             position = position_jitterdodge(jitter.width=0.6, 
+                                             jitter.height=0.05, 
+                                             dodge.width = 0.9),
+             alpha = 0.7) +
+  scale_shape_manual(values = c(21, 16, 2, 17), name = NULL, 
+                     labels = c("0 mites,\n- Sphaerularia", 
+                                ">5 mites,\n- Sphaerularia", 
+                                "0 mites,\n+ Sphaerularia", 
+                                ">5 mites,\n+ Sphaerularia")) +
+  guides(shape = guide_legend(override.aes = list(size = 3))) +
+  scale_color_manual(values = c("darkorchid4", "cyan4", "orange"), 
+                     name = NULL, labels = c("Nest-searching", 
+                                             "Pollen-collecting", 
+                                             "Nectaring")) + 
+  guides(color = guide_legend(override.aes = list(shape = 15, size = 5))) +
+  ylab("Proportion of oocytes resorbed") +
+  xlab("Species") +
+  theme(text = element_text(size=12), axis.text.x = element_text(angle = 90), 
+        legend.position = "bottom", legend.box="vertical")
+
+p2
+
+# 2 part plot by behavior (all species)
+ggarrange(p1, p2, nrow = 2, labels = c("A", "B"), 
+          vjust = c(1.5, 0.3), 
+          common.legend = TRUE, 
+          legend = "bottom")
+ggsave("figS2.jpg")
+```
+
+
+## vosnesenskii
+```{r}
+fo_sp <- fo[fo$species == "vosnesenskii",]
+fq_sp <- fq[fq$species == "vosnesenskii",]
+
+# max oocyte length by behavior (excluding resorbed oocytes)
+ggplot(fq_sp, aes(behav, oocMaxUnR_Len, shape = mites, color = behav)) +
+  geom_point(position = position_jitter(width=0.4, height=0.05), 
+             alpha = 0.8, size = 3) +
+  scale_shape_manual(values = c(21, 16), name = "Mites", labels = c("0", ">5")) +
+  scale_color_manual(values = c("darkorchid4", "cyan4", "orange"), 
+                     name = "Behavior", 
+                     labels = c("Nest-searching", 
+                                "Pollen-collecting", 
+                                "Nectaring")) + 
+  stat_summary(fun = mean, geom = "point", size = 6, shape = 15) +
+  ylab("Oocyte length (mm)") +
+  xlab("Behavior") +
+  scale_x_discrete(labels=c("nestsearch" = "Nest-searching", 
+                            "pollen" = "Pollen-collecting",
+                            "nectaring" = "Nectaring")) +
+  theme(text = element_text(size=14))
+
+# oocyte length by behavior (excluding resorbed oocytes)
+p1 <- ggplot(fo_sp, aes(behav, oocLen_unR, shape = mites, color = behav)) +
+  geom_point(position = position_jitter(width=0.4, height=0.05), 
+             alpha = 0.8, size = 3) +
+  scale_shape_manual(values = c(21, 16), 
+                     name = "Mites", 
+                     labels = c("0", ">5")) +
+  scale_color_manual(values = c("darkorchid4", "cyan4", "orange"), 
+                     name = "Behavior", 
+                     labels = c("Nest-searching", 
+                                "Pollen-collecting", 
+                                "Nectaring")) + 
+  stat_summary(fun = mean, geom = "point", size = 6, shape = 15) +
+  ylab("Oocyte length (mm)") +
+  xlab("Behavior") +
+  scale_x_discrete(labels=c("nestsearch" = "Nest-searching", 
+                            "pollen" = "Pollen-collecting",
+                            "nectaring" = "Nectaring")) +
+  theme(text = element_text(size=14))
+
+p1
+
+# oocyte resorption by behavior
+p2 <- ggplot(fq_sp, aes(behav, oocPropR, color = behav, shape = mites)) +
+  geom_point(position = position_jitter(width=0.4, height=0.05), 
+             alpha = 0.8, size = 3) +
+  scale_shape_manual(values = c(21, 16), name = "Mites", 
+                     labels = c("0", ">5")) +
+  scale_color_manual(values = c("darkorchid4", "cyan4", "orange"), 
+                     name = "Behavior", 
+                     labels = c("Nest-searching", 
+                                "Pollen-collecting", 
+                                "Nectaring")) + 
+  stat_summary(fun = mean, geom = "point", size = 6, shape = 15) +
+  ylab("Proportion of oocytes resorbed") +
+  xlab("Behavior") +
+  scale_x_discrete(labels=c("nestsearch" = "Nest-searching", 
+                            "pollen" = "Pollen-collecting",
+                            "nectaring" = "Nectaring")) +
+  theme(text = element_text(size=14))
+p2
+
+# oocyte lengths over time (excluding resorbed oocytes)
+timeA <- ggplot(fo_sp, aes(date, oocLen_unR)) +
+  geom_point(aes(shape = mites, color = behav),
+             position = position_jitter(width=0.4, height=0.05), 
+             alpha = 0.8, size = 2) +
+  scale_shape_manual(values = c(21, 16), name = "Mites", 
+                     labels = c("0", ">5")) + 
+  ylab("Oocyte length (mm)") +
+  xlab("Date") +
+  scale_color_manual(values = c("darkorchid4", "cyan4", "orange"), 
+                     name = "Behavior", 
+                     labels = c("Nest-searching", 
+                                "Pollen-collecting", 
+                                "Nectaring")) +
+  guides(color = guide_legend(override.aes = list(shape = 15, size = 5))) +
+  theme(text = element_text(size=14))
+timeA
+
+# oocyte resorption over time (excluding resorbed occytes)
+timeB <- ggplot(fo_sp, aes(date, oocPropR)) +
+  geom_smooth(method=lm, alpha = 0, color = "gray") +
+  geom_point(aes(shape = mites, color = behav), 
+             position = position_jitter(width=0.4, height=0.05), 
+             alpha = 0.8, size = 2) +
+  ylab("Proportion of oocytes resorbed") +
+  xlab("Date") +
+  scale_shape_manual(values = c(21, 16), name = "Mites", 
+                     labels = c("0", ">5")) +
+  scale_color_manual(values = c("darkorchid4", "cyan4", "orange"), 
+                     name = "Behavior", 
+                     labels = c("Nest-searching", 
+                                "Pollen-collecting", 
+                                "Nectaring")) +
+  guides(color = guide_legend(override.aes = list(shape = 15, size = 5))) +
+  theme(text = element_text(size=14))
+timeB
+
+# 2 part plot by behavior
+ggarrange(p1, p2, nrow = 2, labels = c("A", "B"), 
+          common.legend = TRUE, 
+          legend = "right")
+ggsave("fig3.jpg")
+
+# 2 part plot over time
+ggarrange(timeA, timeB, nrow = 2, labels = c("A", "B"), 
+          common.legend = TRUE, 
+          legend = "right")
+ggsave("fig4.jpg")
+```
+## ternarius
+```{r}
+fo_sp <- fo[fo$species == "ternarius",]
+fq_sp <- fq[fq$species == "ternarius",]
+
+# oocyte length (excluding resorbed oocytes)
+ggplot(fo_sp, aes(behav, oocLen_unR, shape = mites, color = sphaer)) +
+  geom_point(position = position_jitter(width=0.4, height=0.05), alpha = 0.8) +
+  scale_shape_manual(values = c(21, 16), name = "mites") +
+  stat_summary(fun = mean, geom = "point", size = 5, shape = 16) +
+  ggtitle("unresrobed oocytes by behavior") +
+  ylab("oocyte length (mm)") +
+  xlab("behavior") +
+  theme(text = element_text(size=15))
+
+
+# oocyte stage
+ggplot(fo_sp, aes(behav, stage, shape = mites, color = sphaer)) +
+  geom_point(position = position_jitter(width=0.4, height=0.3), alpha = 0.8) +
+  scale_shape_manual(values = c(21, 16), name = "mites") +
+  stat_summary(fun = mean, geom = "point", size = 5, shape = 16) +
+  ggtitle("unresorbed oocyte stages") +
+  ylab("oocyte stage") +
+  xlab("behavior") +
+  theme(text = element_text(size=10))
+
+
+# oocyte resorption
+ggplot(fq_sp, aes(behav, oocPropR, color = sphaer, shape = mites)) +
+  geom_point(position = position_jitter(width=0.4, height=0.05), alpha = 0.8) +
+  scale_shape_manual(values = c(21, 16), name = "mites") +
+  stat_summary(fun = mean, geom = "point", size = 5, shape = 16) +
+  ggtitle("oocyte resorption") +
+  ylab("proportion of oocytes resorbed") +
+  xlab("behavior") +
+  theme(text = element_text(size=10))
+
+```
+
+# analyze data
+
+## oocyte length (t sphaer)
+what predicts oocyte length?
+```{r}
+fo$behav <- as.character(fo$behav)
+
+ggdensity(fo$oocLen_unR)
+qqp(fo$oocLen_unR, "norm")
+
+######################################### VOS ALONE -- null model fits best
+
+fo_vos <- fo[fo$species == "vosnesenskii",]
+
+lenFull <- glmer(oocLen_unR ~ behav + date + mites + (1|county) + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_vos)
+lenNull <- glmer(oocLen_unR ~ 1 + (1|county) + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_vos)
+len1 <- glmer(oocLen_unR ~ behav + mites + (1|county) + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_vos)
+len2 <- glmer(oocLen_unR ~ behav + date + (1|county) + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_vos)
+len3 <- glmer(oocLen_unR ~ mites + date + (1|county) + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_vos)
+len4 <- glmer(oocLen_unR ~ mites + (1|county) + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_vos)
+len5 <- glmer(oocLen_unR ~ date + (1|county) + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_vos)
+len6 <- glmer(oocLen_unR ~ behav + (1|county) + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_vos)
+
+model.sel(lenFull, lenNull, len1, len2, len3, len4, len5, len6)
+
+tab_model(lenNull)
+
+ggdensity(residuals(lenNull))
+
+######################################### TERNARIUS ONLY -- sphaer significant
+
+fo_tern <- fo[fo$species == "ternarius",]
+
+lenFull <- glmer(oocLen_unR ~ behav + sphaer + mites + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_tern)
+lenNull <- glmer(oocLen_unR ~ 1 + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_tern)
+len1 <- glmer(oocLen_unR ~ behav + mites + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_tern)
+len2 <- glmer(oocLen_unR ~ behav + sphaer + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_tern)
+len3 <- glmer(oocLen_unR ~ mites + sphaer + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_tern)
+len4 <- glmer(oocLen_unR ~ behav + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_tern)
+len5 <- glmer(oocLen_unR ~ mites + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_tern)
+len6 <- glmer(oocLen_unR ~ sphaer + (1|beeID), 
+                family = gaussian(link = identity),
+                data = fo_tern)
+model.sel(lenFull, lenNull, len1, len2, len3, len4, len5, len6)
+
+tab_model(len6)
+summary(len6)
+
+ggdensity(residuals(len6))
+```
+
+## oocyte length max (t sphaer)
+what predicts maximum oocyte length?
+```{r}
+fq$behav <- as.character(fq$behav)
+
+ggdensity(fq$oocMaxUnR_Len)
+
+######################################### VOS ALONE -- null model fits best
+
+fq_vos <- fq[fq$species == "vosnesenskii",]
+  
+  lenFull <- glmer(oocMaxUnR_Len ~ behav + mites + date + (1|county), 
+                  family = gaussian(link = identity),
+                  data = fq_vos) 
+  lenNull <- glmer(oocMaxUnR_Len ~ 1 + (1|county), 
+                  family = gaussian(link = identity),
+                  data = fq_vos)
+  len1 <- glmer(oocMaxUnR_Len ~ behav + mites + (1|county), 
+                  family = gaussian(link = identity),
+                  data = fq_vos)
+  len2 <- glmer(oocMaxUnR_Len ~ behav + date + (1|county), 
+                  family = gaussian(link = identity),
+                  data = fq_vos)
+  len3 <- glmer(oocMaxUnR_Len ~ date + mites + (1|county), 
+                  family = gaussian(link = identity),
+                  data = fq_vos)
+  len4 <- glmer(oocMaxUnR_Len ~ date + (1|county), 
+                  family = gaussian(link = identity),
+                  data = fq_vos)
+  len5 <- glmer(oocMaxUnR_Len ~ behav + (1|county), 
+                  family = gaussian(link = identity),
+                  data = fq_vos)
+  len6 <- glmer(oocMaxUnR_Len ~ mites + (1|county), 
+                  family = gaussian(link = identity),
+                  data = fq_vos)
+    
+model.sel(lenFull, lenNull, len1, len2, len3, len4, len5, len6)
+
+tab_model(lenNull)
+
+ggdensity(residuals(lenNull))
+
+
+######################################### TERNARIUS ALONE -- sphaer significant
+
+fq_tern <- fq[fq$species == "ternarius",]
+
+lenFull <- glm(oocMaxUnR_Len ~ behav + sphaer + mites, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+lenNull <- glm(oocMaxUnR_Len ~ 1, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+len1 <- glm(oocMaxUnR_Len ~ behav + mites, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+len2 <- glm(oocMaxUnR_Len ~ mites + sphaer, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+len3 <- glm(oocMaxUnR_Len ~ sphaer + behav, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+len4 <- glm(oocMaxUnR_Len ~ behav, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+len5 <- glm(oocMaxUnR_Len ~ mites, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+len6 <- glm(oocMaxUnR_Len ~ sphaer, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+model.sel(lenFull, lenNull, len1, len2, len3, len4, len5, len6)
+
+tab_model(len6)
+
+ggdensity(residuals(len6))
+
+```
+
+## oocyte resorption (v date, t sphaer)
+what predicts oocyte resorption?
+```{r}
+ggdensity(fq$oocPropR)
+
+######################################### VOS ALONE -- date significant
+
+fq_vos <- fq[fq$species == "vosnesenskii",]
+
+resFull <- glmer(oocPropR ~ behav + mites + date + (1|county), 
+                family = gaussian(link = identity),
+                data = fq_vos)
+resNull <- glmer(oocPropR ~ 1 + (1|county), 
+                family = gaussian(link = identity),
+                data = fq_vos)
+res1 <- glmer(oocPropR ~ behav + date + (1|county), 
+                family = gaussian(link = identity),
+                data = fq_vos) 
+res2 <- glmer(oocPropR ~ behav + mites + (1|county), 
+                family = gaussian(link = identity),
+                data = fq_vos)
+res3 <- glmer(oocPropR ~ date + mites + (1|county), 
+                family = gaussian(link = identity),
+                data = fq_vos)
+res4 <- glmer(oocPropR ~ date + (1|county), 
+                family = gaussian(link = identity),
+                data = fq_vos)
+res5 <- glmer(oocPropR ~ behav + (1|county), 
+                family = gaussian(link = identity),
+                data = fq_vos)
+res6 <- glmer(oocPropR ~ mites + (1|county), 
+                family = gaussian(link = identity),
+                data = fq_vos)
+
+model.sel(resNull, resFull, res1, res2, res3, res4, res5, res6)
+
+tab_model(res4)
+
+ggdensity(residuals(res4))
+
+
+######################################### TERNARIUS ONLY -- sphaer significant
+
+fq_tern <- fq[fq$species == "ternarius",]
+
+resFull <- glm(oocPropR ~ behav + sphaer + mites, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+resNull <- glm(oocPropR ~ 1, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+res1 <- glm(oocPropR ~ behav + mites, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+res2 <- glm(oocPropR ~ mites + sphaer, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+res3 <- glm(oocPropR ~ behav + sphaer, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+res4 <- glm(oocPropR ~ behav, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+res5 <- glm(oocPropR ~ mites, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+res6 <- glm(oocPropR ~ sphaer, 
+                family = gaussian(link = identity),
+                data = fq_tern)
+
+model.sel(resFull, resNull, res1, res2, res3, res4, res5, res6)
+
+tab_model(res3)
+summary(res3)
+ggdensity(residuals(res3))
+
+```
+
+## length - stage correlation
+are oocyte length and stage correlated?
+```{r}
+coor <- lmer(oocLen_unR ~ stage + (1|beeID:bodySize),
+    data = fo_vos)
+
+coor <- lmer(oocLen_unR ~ stage + (1|species:beeID:bodySize),
+    data = fo)
+
+summary(coor)
+tab_model(coor)
+
+ggplot(fo_vos, aes(oocLen_unR, stage)) +
+  geom_smooth(method=lm, alpha = 5, color = "gray20") +
+  geom_point()
+```
+
+
+## mites
+does mite presence correlate to behavioral category?
+```{r}
+chisq.test(x = fo_vos$behav, y = fo_vos$mites)
+```
