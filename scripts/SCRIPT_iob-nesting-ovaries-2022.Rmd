@@ -30,9 +30,7 @@ library(MuMIn)    # model.sel
 
 # load data
 ```{r}
-# this assumes the raw_data.csv file is in the same folder as this .Rmd file
-
-fq <- read.csv("raw_data.csv", header = TRUE, 
+fq <- read.csv("./data/raw_data.csv", header = TRUE, 
                na.strings = c("na", "NA" , "", " "))
 
 # remove stationary queens (outside of 3 focal behavioral categories)
